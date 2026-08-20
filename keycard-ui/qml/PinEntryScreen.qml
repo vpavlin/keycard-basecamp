@@ -28,6 +28,10 @@ FocusScope {
     // Implicit unlock (session PIN cache) — parity with the phone: unlock once, then just confirm
     // each sign. Kept in memory only, never persisted; cleared on a wrong PIN. See approveRequest().
     property string cachedPin: ""
+    // Auto-lock the cached PIN after this many seconds idle; unlockRemaining drives the countdown so
+    // the user can SEE it's temporary and lock it immediately if they want.
+    property int lockAfterSec: 600
+    property int unlockRemaining: 0
     property int maxPinLength: 6
     property bool verifyingPin: false
     property int attemptsRemaining: 3
@@ -197,6 +201,13 @@ FocusScope {
         root.pairingBusy = false
     }
 
+    // mm:ss for the auto-lock countdown.
+    function fmtMMSS(s) {
+        if (s < 0) s = 0
+        var m = Math.floor(s / 60); var ss = s % 60
+        return m + ":" + (ss < 10 ? "0" : "") + ss
+    }
+
     function checkPendingRequests() {
         var ts = Qt.formatTime(new Date(), "[HH:mm:ss]")
         var wasPendingChecked = root.pendingChecked
@@ -222,7 +233,8 @@ FocusScope {
                 activityLog.addEntry(ts, "New sign request from " + root.currentRequest.caller, "warning")
                 // Already unlocked this session → pre-fill the PIN so the user just taps "Sign"
                 // (no re-typing), matching the phone. First sign of the session still asks once.
-                if (root.cachedPin !== "") root.pinValue = root.cachedPin
+                // Using it extends the idle window.
+                if (root.cachedPin !== "") { root.pinValue = root.cachedPin; root.unlockRemaining = root.lockAfterSec }
                 return
             }
         } catch (e) {}
@@ -281,8 +293,9 @@ FocusScope {
             var ts2 = Qt.formatTime(new Date(), "[HH:mm:ss]")
             if (response.status === "complete") {
                 var caller = currentRequest.caller
-                // PIN verified OK → remember it for the rest of this session (implicit unlock).
-                if (!isXPUB) root.cachedPin = pinValue
+                // PIN verified OK → remember it for the session (implicit unlock) and start the
+                // auto-lock countdown, so it never lingers indefinitely.
+                if (!isXPUB) { root.cachedPin = pinValue; root.unlockRemaining = root.lockAfterSec }
                 currentRequest = null
                 pinValue = ""
                 pendingChecked = false
@@ -368,6 +381,12 @@ FocusScope {
         }
     }
 
+    // Auto-lock: count down while the PIN is cached; clear it (require PIN again) when it hits zero.
+    Timer {
+        interval: 1000; repeat: true; running: root.cachedPin !== ""
+        onTriggered: { root.unlockRemaining -= 1; if (root.unlockRemaining <= 0) { root.cachedPin = ""; root.unlockRemaining = 0 } }
+    }
+
     Timer {
         id: hwTimer
         interval: 2000
@@ -445,6 +464,40 @@ FocusScope {
                     font.weight: Font.Medium
                     font.family: DesignTokens.fontPrimary
                     horizontalAlignment: Text.AlignHCenter
+                }
+
+                // Session-unlock status — reassure the user the PIN is held only briefly, show the
+                // countdown, and let them lock it immediately. Only while idle (a pending request has
+                // its own screen). Auto-locks at zero; a wrong PIN also clears it.
+                Column {
+                    visible: root.cachedPin !== "" && root.currentRequest === null && root.paired
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 40
+                    spacing: DesignTokens.spacingM
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "🔓 Card unlocked · re-locks in " + root.fmtMMSS(root.unlockRemaining)
+                        color: DesignTokens.foregroundSecondary
+                        font.pixelSize: DesignTokens.fontSizeSmall
+                        font.family: DesignTokens.fontPrimary
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Rectangle {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: lockNowLabel.implicitWidth + 32; height: DesignTokens.buttonHeight
+                        radius: DesignTokens.radiusM
+                        color: "transparent"; border.color: DesignTokens.border; border.width: 1
+                        Text {
+                            id: lockNowLabel; anchors.centerIn: parent; text: "🔒 Lock now"
+                            color: DesignTokens.foreground; font.pixelSize: DesignTokens.fontSizeSmall
+                            font.family: DesignTokens.fontPrimary
+                        }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                            onClicked: { root.cachedPin = ""; root.unlockRemaining = 0 }
+                        }
+                    }
                 }
 
                 // Request (when pending)
