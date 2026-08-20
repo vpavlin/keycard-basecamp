@@ -1,6 +1,6 @@
 {
   "name": "keycard-ui",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "ui_qml",
   "category": "security",
   "description": "Keycard debug UI and test harness",

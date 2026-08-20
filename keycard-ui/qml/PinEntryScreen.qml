@@ -25,6 +25,9 @@ FocusScope {
     }
     property bool pendingChecked: false
     property string pinValue: ""
+    // Implicit unlock (session PIN cache) — parity with the phone: unlock once, then just confirm
+    // each sign. Kept in memory only, never persisted; cleared on a wrong PIN. See approveRequest().
+    property string cachedPin: ""
     property int maxPinLength: 6
     property bool verifyingPin: false
     property int attemptsRemaining: 3
@@ -217,6 +220,9 @@ FocusScope {
             if (signResponse && signResponse.pending && signResponse.pending.length > 0 && !root.currentRequest) {
                 root.currentRequest = signResponse.pending[0]
                 activityLog.addEntry(ts, "New sign request from " + root.currentRequest.caller, "warning")
+                // Already unlocked this session → pre-fill the PIN so the user just taps "Sign"
+                // (no re-typing), matching the phone. First sign of the session still asks once.
+                if (root.cachedPin !== "") root.pinValue = root.cachedPin
                 return
             }
         } catch (e) {}
@@ -275,6 +281,8 @@ FocusScope {
             var ts2 = Qt.formatTime(new Date(), "[HH:mm:ss]")
             if (response.status === "complete") {
                 var caller = currentRequest.caller
+                // PIN verified OK → remember it for the rest of this session (implicit unlock).
+                if (!isXPUB) root.cachedPin = pinValue
                 currentRequest = null
                 pinValue = ""
                 pendingChecked = false
@@ -297,6 +305,7 @@ FocusScope {
                     activityLog.addEntry(ts2, err, "error")
                     activityLog.addEntry(ts2, "Try again", "warning")
                 }
+                root.cachedPin = ""      // a wrong PIN / failure clears the session unlock → re-prompt
                 pinValue = ""
                 hiddenInput.forceActiveFocus()
             }
