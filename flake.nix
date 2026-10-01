@@ -38,6 +38,11 @@
               pkgs.openssl
               pkgs.pcsclite
             ];
+            # macOS: nixpkgs' pcsclite puts winscard.h and pcsclite.h in include/PCSC, and winscard.h
+            # includes <pcsclite.h> with angle brackets — add that dir so it resolves (Linux finds it
+            # via pkg-config already). Without a pcscd on macOS the module loads with no reader.
+            env.NIX_CFLAGS_COMPILE = pkgs.lib.optionalString pkgs.stdenv.isDarwin
+              "-I${pkgs.lib.getDev pkgs.pcsclite}/include/PCSC";
 
             # Library only — no app wrapping, no tests, no examples
             dontWrapQtApps = true;
