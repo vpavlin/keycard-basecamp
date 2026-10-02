@@ -17,14 +17,14 @@
 #include <sodium.h>
 #include <vector>
 
-KeycardPlugin::KeycardPlugin(QObject* parent)
+KeycardService::KeycardService(QObject* parent)
     : QObject(parent)
     , m_bridge(nullptr)
 {
-    qDebug() << "KeycardPlugin constructed";
+    qDebug() << "KeycardService constructed";
 }
 
-KeycardPlugin::~KeycardPlugin()
+KeycardService::~KeycardService()
 {
     // Wipe all pending requests on unload — SecureBuffer destructors wipe key material via RAII
     purgeCompletedRequests();
@@ -38,15 +38,9 @@ KeycardPlugin::~KeycardPlugin()
     }
 }
 
-void KeycardPlugin::initLogos(LogosAPI* api)
+QString KeycardService::initialize()
 {
-    logosAPI = api;
-    qDebug() << "KeycardPlugin: Logos API initialized";
-}
-
-QString KeycardPlugin::initialize()
-{
-    qDebug() << "KeycardPlugin::initialize() called";
+    qDebug() << "KeycardService::initialize() called";
 
     if (!m_bridge) {
         m_bridge = new KeycardBridge(this);
@@ -61,9 +55,9 @@ QString KeycardPlugin::initialize()
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::discoverReader()
+QString KeycardService::discoverReader()
 {
-    qDebug() << "KeycardPlugin::discoverReader() called";
+    qDebug() << "KeycardService::discoverReader() called";
 
     logActivity("Looking for smart card reader...", "info");
 
@@ -101,9 +95,9 @@ QString KeycardPlugin::discoverReader()
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::discoverCard()
+QString KeycardService::discoverCard()
 {
-    qDebug() << "KeycardPlugin::discoverCard() called";
+    qDebug() << "KeycardService::discoverCard() called";
 
     if (!m_bridge) {
         QJsonObject result;
@@ -160,7 +154,7 @@ QString KeycardPlugin::discoverCard()
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::checkPairing()
+QString KeycardService::checkPairing()
 {
     if (!m_bridge) {
         QJsonObject result;
@@ -182,9 +176,9 @@ QString KeycardPlugin::checkPairing()
     return QJsonDocument(checkResult).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::pairCard(const QString& pairingPassword)
+QString KeycardService::pairCard(const QString& pairingPassword)
 {
-    qDebug() << "KeycardPlugin::pairCard() called";
+    qDebug() << "KeycardService::pairCard() called";
 
     if (!m_bridge) {
         QJsonObject result;
@@ -210,9 +204,9 @@ QString KeycardPlugin::pairCard(const QString& pairingPassword)
     return QJsonDocument(pairResult).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::unpairCard()
+QString KeycardService::unpairCard()
 {
-    qDebug() << "KeycardPlugin::unpairCard() called";
+    qDebug() << "KeycardService::unpairCard() called";
 
     if (!m_bridge) {
         QJsonObject result;
@@ -232,9 +226,9 @@ QString KeycardPlugin::unpairCard()
     return QJsonDocument(unpairResult).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::authorize(const QString& pin)
+QString KeycardService::authorize(const QString& pin)
 {
-    qDebug() << "KeycardPlugin::authorize() called";
+    qDebug() << "KeycardService::authorize() called";
 
     if (!m_bridge) {
         QJsonObject result;
@@ -294,7 +288,7 @@ static std::array<uint32_t, 4> domainToIndices(const QString& domain)
     }};
 }
 
-QString KeycardPlugin::domainToPath(const QString& domain)
+QString KeycardService::domainToPath(const QString& domain)
 {
     auto idx = domainToIndices(domain);
     return QString("m/43'/60'/1581'/%1'/%2'/%3'/%4'").arg(idx[0]).arg(idx[1]).arg(idx[2]).arg(idx[3]);
@@ -303,15 +297,15 @@ QString KeycardPlugin::domainToPath(const QString& domain)
 // domainToSignPath — same hash → indices as domainToPath, but rooted at m/43'/60'/1582'.
 // 1582' is a non-exportable subtree: chain code export is not permitted there, so signing
 // keys derived here cannot be exfiltrated via the EXPORT_KEY APDU. (#150)
-QString KeycardPlugin::domainToSignPath(const QString& domain)
+QString KeycardService::domainToSignPath(const QString& domain)
 {
     auto idx = domainToIndices(domain);
     return QString("m/43'/60'/1582'/%1'/%2'/%3'/%4'").arg(idx[0]).arg(idx[1]).arg(idx[2]).arg(idx[3]);
 }
 
-QString KeycardPlugin::deriveKey(const QString& domain)
+QString KeycardService::deriveKey(const QString& domain)
 {
-    qDebug() << "KeycardPlugin::deriveKey() called, domain:" << domain;
+    qDebug() << "KeycardService::deriveKey() called, domain:" << domain;
 
     if (!m_bridge) {
         QJsonObject result;
@@ -327,7 +321,7 @@ QString KeycardPlugin::deriveKey(const QString& domain)
     }
 
     QString eip1581Path = domainToPath(domain);
-    qDebug() << "KeycardPlugin::deriveKey() - domain:" << domain << "→ path:" << eip1581Path;
+    qDebug() << "KeycardService::deriveKey() - domain:" << domain << "→ path:" << eip1581Path;
 
     // Derive key on-card at custom EIP-1581 path (real BIP32 derivation)
     QByteArray derivedKey = m_bridge->exportKey(eip1581Path);
@@ -351,7 +345,7 @@ QString KeycardPlugin::deriveKey(const QString& domain)
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::getState()
+QString KeycardService::getState()
 {
     if (!m_bridge) {
         QJsonObject result;
@@ -374,27 +368,27 @@ QString KeycardPlugin::getState()
                      bridgeState == KeycardBridge::State::ConnectionError);
 
     if (cardGone && (m_sessionState == SessionState::Active || m_sessionState == SessionState::NoSession)) {
-        qDebug() << "KeycardPlugin::getState() - card gone, clearing session state";
+        qDebug() << "KeycardService::getState() - card gone, clearing session state";
         m_sessionState = SessionState::NoSession;
         purgeCompletedRequests();
     }
 
     // Session state takes precedence over bridge state (only if card still present)
     if (m_sessionState == SessionState::Active) {
-        qDebug() << "KeycardPlugin::getState() - returning SESSION_ACTIVE";
+        qDebug() << "KeycardService::getState() - returning SESSION_ACTIVE";
         result["state"] = "SESSION_ACTIVE";
     } else {
         QString mappedState = mapBridgeStateToSpec(bridgeState);
-        qDebug() << "KeycardPlugin::getState() - returning bridge state:" << mappedState << "(bridge state enum:" << static_cast<int>(bridgeState) << ")";
+        qDebug() << "KeycardService::getState() - returning bridge state:" << mappedState << "(bridge state enum:" << static_cast<int>(bridgeState) << ")";
         result["state"] = mappedState;
     }
 
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::closeSession()
+QString KeycardService::closeSession()
 {
-    qDebug() << "KeycardPlugin::closeSession() called";
+    qDebug() << "KeycardService::closeSession() called";
 
     // Reset session state (keep bridge running for future requests)
     m_sessionState = SessionState::NoSession;
@@ -407,7 +401,7 @@ QString KeycardPlugin::closeSession()
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::getLastError()
+QString KeycardService::getLastError()
 {
     if (!m_bridge) {
         QJsonObject result;
@@ -421,9 +415,9 @@ QString KeycardPlugin::getLastError()
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::testPCSC()
+QString KeycardService::testPCSC()
 {
-    qDebug() << "KeycardPlugin::testPCSC() - testing PC/SC directly";
+    qDebug() << "KeycardService::testPCSC() - testing PC/SC directly";
 
     QJsonObject result;
     result["pcsc_working"] = m_bridge ? m_bridge->isCardPresent() : false;
@@ -435,7 +429,7 @@ QString KeycardPlugin::testPCSC()
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::checkReaderPresent()
+QString KeycardService::checkReaderPresent()
 {
     // Skip during multi-step operations to avoid PC/SC contention
     if (m_bridge && m_bridge->isOperationInProgress()) {
@@ -471,7 +465,7 @@ QString KeycardPlugin::checkReaderPresent()
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::checkCardPresent()
+QString KeycardService::checkCardPresent()
 {
     // Skip during multi-step operations to avoid PC/SC contention
     if (m_bridge && m_bridge->isOperationInProgress()) {
@@ -530,9 +524,9 @@ QString KeycardPlugin::checkCardPresent()
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::unblockPIN(const QString& puk, const QString& newPIN)
+QString KeycardService::unblockPIN(const QString& puk, const QString& newPIN)
 {
-    qDebug() << "KeycardPlugin::unblockPIN() called";
+    qDebug() << "KeycardService::unblockPIN() called";
 
     if (!m_bridge) {
         QJsonObject result;
@@ -593,7 +587,7 @@ QString KeycardPlugin::unblockPIN(const QString& puk, const QString& newPIN)
     }
 }
 
-QString KeycardPlugin::getCardStatus()
+QString KeycardService::getCardStatus()
 {
     if (!m_bridge) {
         QJsonObject result;
@@ -610,7 +604,7 @@ QString KeycardPlugin::getCardStatus()
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::detectMode()
+QString KeycardService::detectMode()
 {
     QJsonObject result;
     if (!m_bridge) {
@@ -632,7 +626,7 @@ QString KeycardPlugin::detectMode()
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::loadKey(const QString& jsonArgs)
+QString KeycardService::loadKey(const QString& jsonArgs)
 {
     QJsonObject result;
     if (!m_bridge || !m_bridge->commandSet()) {
@@ -669,7 +663,7 @@ QString KeycardPlugin::loadKey(const QString& jsonArgs)
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::removeKey()
+QString KeycardService::removeKey()
 {
     QJsonObject result;
     if (!m_bridge || !m_bridge->commandSet()) {
@@ -687,7 +681,7 @@ QString KeycardPlugin::removeKey()
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::mapBridgeStateToSpec(KeycardBridge::State state)
+QString KeycardService::mapBridgeStateToSpec(KeycardBridge::State state)
 {
     // Map KeycardBridge states to SPEC.md 7-state model
     switch (state) {
@@ -718,7 +712,7 @@ QString KeycardPlugin::mapBridgeStateToSpec(KeycardBridge::State state)
     return "READER_NOT_FOUND";
 }
 
-QString KeycardPlugin::getCardPresence()
+QString KeycardService::getCardPresence()
 {
     QJsonObject result;
 
@@ -754,7 +748,7 @@ QString KeycardPlugin::getCardPresence()
 
 // Authorization request API implementation (Option C: Module-Managed Auth State)
 
-QString KeycardPlugin::requestAuth(const QString& domain, const QString& caller)
+QString KeycardService::requestAuth(const QString& domain, const QString& caller)
 {
     // Generate unique auth request ID
     QString authId = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -780,7 +774,7 @@ QString KeycardPlugin::requestAuth(const QString& domain, const QString& caller)
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::checkAuthStatus(const QString& authId)
+QString KeycardService::checkAuthStatus(const QString& authId)
 {
     for (size_t i = 0; i < m_authRequests.size(); ++i) {
         auto& req = m_authRequests[i];
@@ -817,7 +811,7 @@ QString KeycardPlugin::checkAuthStatus(const QString& authId)
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::getPendingAuths()
+QString KeycardService::getPendingAuths()
 {
     QJsonArray pending;
 
@@ -847,9 +841,9 @@ QString KeycardPlugin::getPendingAuths()
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::authorizeRequest(const QString& authId, const QString& pin)
+QString KeycardService::authorizeRequest(const QString& authId, const QString& pin)
 {
-    qDebug() << "KeycardPlugin::authorizeRequest() called for authId:" << authId;
+    qDebug() << "KeycardService::authorizeRequest() called for authId:" << authId;
 
     // Find pending request
     AuthRequest* targetRequest = nullptr;
@@ -962,9 +956,9 @@ QString KeycardPlugin::authorizeRequest(const QString& authId, const QString& pi
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::rejectRequest(const QString& authId)
+QString KeycardService::rejectRequest(const QString& authId)
 {
-    qDebug() << "KeycardPlugin::rejectRequest() called for authId:" << authId;
+    qDebug() << "KeycardService::rejectRequest() called for authId:" << authId;
 
     // Find pending request
     AuthRequest* targetRequest = nullptr;
@@ -1001,7 +995,7 @@ QString KeycardPlugin::rejectRequest(const QString& authId)
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::hashMessage(const QString& message)
+QString KeycardService::hashMessage(const QString& message)
 {
     QByteArray hash = QCryptographicHash::hash(message.toUtf8(), QCryptographicHash::Sha256);
     QJsonObject result;
@@ -1011,7 +1005,7 @@ QString KeycardPlugin::hashMessage(const QString& message)
 
 // --- Signing request API (#98) ---
 
-QString KeycardPlugin::requestSign(const QString& jsonArgs)
+QString KeycardService::requestSign(const QString& jsonArgs)
 {
     QJsonDocument doc = QJsonDocument::fromJson(jsonArgs.toUtf8());
     if (doc.isNull() || !doc.isObject()) {
@@ -1086,7 +1080,7 @@ QString KeycardPlugin::requestSign(const QString& jsonArgs)
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::checkSignStatus(const QString& jsonOrId)
+QString KeycardService::checkSignStatus(const QString& jsonOrId)
 {
     // Accept {"signId":"..."} or plain UUID string
     QString signId = jsonOrId;
@@ -1126,7 +1120,7 @@ QString KeycardPlugin::checkSignStatus(const QString& jsonOrId)
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::getPendingSigns()
+QString KeycardService::getPendingSigns()
 {
     QJsonArray pending;
     for (auto& req : m_signRequests) {
@@ -1163,7 +1157,7 @@ QString KeycardPlugin::getPendingSigns()
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::approveSign(const QString& jsonArgs)
+QString KeycardService::approveSign(const QString& jsonArgs)
 {
     QJsonDocument doc = QJsonDocument::fromJson(jsonArgs.toUtf8());
     if (doc.isNull() || !doc.isObject()) {
@@ -1180,7 +1174,7 @@ QString KeycardPlugin::approveSign(const QString& jsonArgs)
         return QJsonDocument(err).toJson(QJsonDocument::Compact);
     }
 
-    qDebug() << "KeycardPlugin::approveSign() called for signId:" << signId;
+    qDebug() << "KeycardService::approveSign() called for signId:" << signId;
 
     SignRequest* req = nullptr;
     for (auto& r : m_signRequests) {
@@ -1262,7 +1256,7 @@ QString KeycardPlugin::approveSign(const QString& jsonArgs)
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::rejectSign(const QString& jsonOrId)
+QString KeycardService::rejectSign(const QString& jsonOrId)
 {
     // Accept {"signId":"..."} or plain UUID string
     QString signId = jsonOrId;
@@ -1294,7 +1288,7 @@ QString KeycardPlugin::rejectSign(const QString& jsonOrId)
 
 // --- XPUB export API (#142) ---
 
-QString KeycardPlugin::requestXPUB(const QString& jsonArgs)
+QString KeycardService::requestXPUB(const QString& jsonArgs)
 {
     QJsonDocument doc = QJsonDocument::fromJson(jsonArgs.toUtf8());
     if (doc.isNull() || !doc.isObject()) {
@@ -1341,7 +1335,7 @@ QString KeycardPlugin::requestXPUB(const QString& jsonArgs)
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::checkXPUBStatus(const QString& jsonOrId)
+QString KeycardService::checkXPUBStatus(const QString& jsonOrId)
 {
     // Accept {"xpubId":"..."} or plain UUID string
     QString xpubId = jsonOrId;
@@ -1380,7 +1374,7 @@ QString KeycardPlugin::checkXPUBStatus(const QString& jsonOrId)
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::getPendingXPUBs()
+QString KeycardService::getPendingXPUBs()
 {
     QJsonArray pending;
     for (auto& req : m_xpubRequests) {
@@ -1406,7 +1400,7 @@ QString KeycardPlugin::getPendingXPUBs()
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::approveXPUB(const QString& jsonArgs)
+QString KeycardService::approveXPUB(const QString& jsonArgs)
 {
     QJsonDocument doc = QJsonDocument::fromJson(jsonArgs.toUtf8());
     if (doc.isNull() || !doc.isObject()) {
@@ -1423,7 +1417,7 @@ QString KeycardPlugin::approveXPUB(const QString& jsonArgs)
         return QJsonDocument(err).toJson(QJsonDocument::Compact);
     }
 
-    qDebug() << "KeycardPlugin::approveXPUB() called for xpubId:" << xpubId;
+    qDebug() << "KeycardService::approveXPUB() called for xpubId:" << xpubId;
 
     XPUBRequest* req = nullptr;
     for (auto& r : m_xpubRequests) {
@@ -1457,7 +1451,7 @@ QString KeycardPlugin::approveXPUB(const QString& jsonArgs)
     // Step 2a: log applet version + keyUID for diagnostics
     {
         auto info = m_bridge->commandSet()->applicationInfo();
-        qDebug() << "KeycardPlugin::approveXPUB() applet version:"
+        qDebug() << "KeycardService::approveXPUB() applet version:"
                  << info.appVersion << "." << info.appVersionMinor
                  << "keyUID:" << info.keyUID.toHex()
                  << "capabilities:" << QString("0x%1").arg(info.capabilities, 2, 16, QChar('0'));
@@ -1476,7 +1470,7 @@ QString KeycardPlugin::approveXPUB(const QString& jsonArgs)
             false, false, QString(), Keycard::APDU::P2ExportKeyExtendedPublic);
         if (probe.isEmpty()) {
             QString probeErr = m_bridge->commandSet()->lastError();
-            qDebug() << "KeycardPlugin::approveXPUB() master probe failed:" << probeErr;
+            qDebug() << "KeycardService::approveXPUB() master probe failed:" << probeErr;
             if (probeErr.contains("6985", Qt::CaseInsensitive)) {
                 if (m_bridge) m_bridge->setOperationInProgress(false);
                 req->status = "failed";
@@ -1493,9 +1487,9 @@ QString KeycardPlugin::approveXPUB(const QString& jsonArgs)
                 return QJsonDocument(result).toJson(QJsonDocument::Compact);
             }
             // Other error — log but proceed; derive+export may still work
-            qDebug() << "KeycardPlugin::approveXPUB() master probe non-6985 error (proceeding):" << probeErr;
+            qDebug() << "KeycardService::approveXPUB() master probe non-6985 error (proceeding):" << probeErr;
         } else {
-            qDebug() << "KeycardPlugin::approveXPUB() master probe succeeded (" << probe.size() << " bytes) — card has BIP32 seed";
+            qDebug() << "KeycardService::approveXPUB() master probe succeeded (" << probe.size() << " bytes) — card has BIP32 seed";
         }
     }
 
@@ -1573,7 +1567,7 @@ QString KeycardPlugin::approveXPUB(const QString& jsonArgs)
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::rejectXPUB(const QString& jsonOrId)
+QString KeycardService::rejectXPUB(const QString& jsonOrId)
 {
     // Accept {"xpubId":"..."} or plain UUID string
     QString xpubId = jsonOrId;
@@ -1603,7 +1597,7 @@ QString KeycardPlugin::rejectXPUB(const QString& jsonOrId)
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-QString KeycardPlugin::testXPUBExport(const QString& jsonArgs)
+QString KeycardService::testXPUBExport(const QString& jsonArgs)
 {
     // Debug method: authorize + derive + exportKeyExtended in one call.
     // Used for headless testing where the request/approve queue can't be chained.
@@ -1622,7 +1616,7 @@ QString KeycardPlugin::testXPUBExport(const QString& jsonArgs)
         return QJsonDocument(err).toJson(QJsonDocument::Compact);
     }
 
-    qDebug() << "KeycardPlugin::testXPUBExport() domain:" << domain;
+    qDebug() << "KeycardService::testXPUBExport() domain:" << domain;
 
     // Step 1: verify PIN
     QJsonObject authResult = QJsonDocument::fromJson(authorize(pin).toUtf8()).object();
@@ -1674,7 +1668,7 @@ QString KeycardPlugin::testXPUBExport(const QString& jsonArgs)
     return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
 
-void KeycardPlugin::purgeCompletedRequests()
+void KeycardService::purgeCompletedRequests()
 {
     // SECURITY: Wipe key material and remove completed/consumed requests.
     // SecureBuffer destructor handles sodium_memzero via RAII,
@@ -1692,7 +1686,7 @@ void KeycardPlugin::purgeCompletedRequests()
     m_authRequests.erase(it, m_authRequests.end());
 }
 
-void KeycardPlugin::logActivity(const QString& message, const QString& level)
+void KeycardService::logActivity(const QString& message, const QString& level)
 {
     QString timestamp = QDateTime::currentDateTime().toString("[HH:mm:ss]");
 
@@ -1708,7 +1702,7 @@ void KeycardPlugin::logActivity(const QString& message, const QString& level)
     qDebug() << "Activity:" << timestamp << level.toUpper() << message;
 }
 
-void KeycardPlugin::addActivityToResponse(QJsonObject& response)
+void KeycardService::addActivityToResponse(QJsonObject& response)
 {
     if (m_recentActivity.isEmpty()) {
         return;
@@ -1733,7 +1727,7 @@ void KeycardPlugin::addActivityToResponse(QJsonObject& response)
 // This probes whether the loaded key has chain code at root level.
 // 0x6985 here → BIP39 load didn't store chain code
 // OK here but testXPUBExport fails → derivation issue
-QString KeycardPlugin::testMasterExport(const QString& pin)
+QString KeycardService::testMasterExport(const QString& pin)
 {
     QJsonObject result;
     if (!m_bridge || !m_bridge->commandSet()) {
@@ -1785,7 +1779,7 @@ QString KeycardPlugin::testMasterExport(const QString& pin)
 // testEip1581Export — diagnostic: export XPUB at m/43'/60'/1581' (EIP-1581 root).
 // Firmware forbids chain code export at this root and at master. No depth restriction.
 // Prior 0x6985 at deeper paths was due to wrong TLV tags + two-step export (fixed).
-QString KeycardPlugin::testEip1581Export(const QString& pin)
+QString KeycardService::testEip1581Export(const QString& pin)
 {
     QJsonObject result;
     if (!m_bridge || !m_bridge->commandSet()) {
