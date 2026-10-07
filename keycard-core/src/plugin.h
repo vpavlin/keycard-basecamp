@@ -8,74 +8,71 @@
 #include <QDateTime>
 #include <QSet>
 #include <vector>
-#include "interface.h"
 
-class KeycardPlugin : public QObject, public PluginInterface
+// The keycard card logic. Formerly the module's Qt plugin class (KeycardPlugin); since the
+// universal port it is a plain QObject owned by KeycardImpl (keycard_impl.h), which is the
+// module API. Behaviour is unchanged.
+class KeycardService : public QObject
 {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID "org.logos.KeycardModuleInterface" FILE "plugin_metadata.json")
-    Q_INTERFACES(PluginInterface)
 
 public:
-    explicit KeycardPlugin(QObject* parent = nullptr);
-    ~KeycardPlugin() override;
+    explicit KeycardService(QObject* parent = nullptr);
+    ~KeycardService() override;
 
-    QString name()    const override { return QStringLiteral("keycard"); }
-    QString version() const override { return QStringLiteral("1.0.0"); }
 
     // No override keyword (Lesson #19 - called reflectively)
-    Q_INVOKABLE void    initLogos(LogosAPI* api);
-    Q_INVOKABLE QString initialize();
+    QString initialize();
 
     // Core keycard operations
-    Q_INVOKABLE QString discoverReader();
-    Q_INVOKABLE QString discoverCard();
-    Q_INVOKABLE QString checkPairing();
-    Q_INVOKABLE QString pairCard(const QString& pairingPassword);
-    Q_INVOKABLE QString unpairCard();
-    Q_INVOKABLE QString authorize(const QString& pin);
-    Q_INVOKABLE QString deriveKey(const QString& domain);
-    Q_INVOKABLE QString getState();
-    Q_INVOKABLE QString closeSession();
-    Q_INVOKABLE QString getLastError();
-    Q_INVOKABLE QString testPCSC();  // Debug: test PC/SC directly
-    Q_INVOKABLE QString checkReaderPresent();  // Fresh PC/SC check
-    Q_INVOKABLE QString checkCardPresent();   // Fresh PC/SC check
-    Q_INVOKABLE QString unblockPIN(const QString& puk, const QString& newPIN);
-    Q_INVOKABLE QString getCardStatus();  // Get PIN/PUK attempts remaining
-    Q_INVOKABLE QString detectMode();     // Returns {"mode":"BIP39"|"LEE"|"none"}
-    Q_INVOKABLE QString loadKey(const QString& jsonArgs); // Debug: load key, expects {"seedHex":"...","keyType":0|1}
-    Q_INVOKABLE QString removeKey();      // Debug: remove loaded key
+    QString discoverReader();
+    QString discoverCard();
+    QString checkPairing();
+    QString pairCard(const QString& pairingPassword);
+    QString unpairCard();
+    QString authorize(const QString& pin);
+    QString deriveKey(const QString& domain);
+    QString getState();
+    QString closeSession();
+    QString getLastError();
+    QString testPCSC();  // Debug: test PC/SC directly
+    QString checkReaderPresent();  // Fresh PC/SC check
+    QString checkCardPresent();   // Fresh PC/SC check
+    QString unblockPIN(const QString& puk, const QString& newPIN);
+    QString getCardStatus();  // Get PIN/PUK attempts remaining
+    QString detectMode();     // Returns {"mode":"BIP39"|"LEE"|"none"}
+    QString loadKey(const QString& jsonArgs); // Debug: load key, expects {"seedHex":"...","keyType":0|1}
+    QString removeKey();      // Debug: remove loaded key
 
     // Card presence (for consuming modules to poll)
-    Q_INVOKABLE QString getCardPresence();
+    QString getCardPresence();
 
     // Authorization request API
-    Q_INVOKABLE QString requestAuth(const QString& domain, const QString& caller);
-    Q_INVOKABLE QString checkAuthStatus(const QString& authId);
-    Q_INVOKABLE QString getPendingAuths();
-    Q_INVOKABLE QString authorizeRequest(const QString& authId, const QString& pin);
-    Q_INVOKABLE QString rejectRequest(const QString& authId);
+    QString requestAuth(const QString& domain, const QString& caller);
+    QString checkAuthStatus(const QString& authId);
+    QString getPendingAuths();
+    QString authorizeRequest(const QString& authId, const QString& pin);
+    QString rejectRequest(const QString& authId);
 
     // Utility
-    Q_INVOKABLE QString hashMessage(const QString& message);  // SHA-256 hex of UTF-8 message
+    QString hashMessage(const QString& message);  // SHA-256 hex of UTF-8 message
 
     // Signing request API (#98, #149, #150)
-    Q_INVOKABLE QString requestSign(const QString& jsonArgs); // {"domain","payloadHash","caller","scheme","bip32_path"?}
-    Q_INVOKABLE QString checkSignStatus(const QString& signId);
-    Q_INVOKABLE QString getPendingSigns();
-    Q_INVOKABLE QString approveSign(const QString& jsonArgs); // {"signId":"...","pin":"..."}
-    Q_INVOKABLE QString rejectSign(const QString& signId);
+    QString requestSign(const QString& jsonArgs); // {"domain","payloadHash","caller","scheme","bip32_path"?}
+    QString checkSignStatus(const QString& signId);
+    QString getPendingSigns();
+    QString approveSign(const QString& jsonArgs); // {"signId":"...","pin":"..."}
+    QString rejectSign(const QString& signId);
 
     // XPUB export API (#142)
-    Q_INVOKABLE QString requestXPUB(const QString& jsonArgs);  // {"domain","caller"}
-    Q_INVOKABLE QString approveXPUB(const QString& jsonArgs);  // {"xpubId","pin"}
-    Q_INVOKABLE QString rejectXPUB(const QString& xpubId);
-    Q_INVOKABLE QString checkXPUBStatus(const QString& xpubId);
-    Q_INVOKABLE QString getPendingXPUBs();
-    Q_INVOKABLE QString testXPUBExport(const QString& jsonArgs); // Debug: {"domain","pin"} — direct export, bypasses request queue
-    Q_INVOKABLE QString testMasterExport(const QString& pin);   // Debug: authorize + export master (no derive) — chain code probe
-    Q_INVOKABLE QString testEip1581Export(const QString& pin);  // Debug: authorize + export at m/43'/60'/1581' — EIP-1581 root probe
+    QString requestXPUB(const QString& jsonArgs);  // {"domain","caller"}
+    QString approveXPUB(const QString& jsonArgs);  // {"xpubId","pin"}
+    QString rejectXPUB(const QString& xpubId);
+    QString checkXPUBStatus(const QString& xpubId);
+    QString getPendingXPUBs();
+    QString testXPUBExport(const QString& jsonArgs); // Debug: {"domain","pin"} — direct export, bypasses request queue
+    QString testMasterExport(const QString& pin);   // Debug: authorize + export master (no derive) — chain code probe
+    QString testEip1581Export(const QString& pin);  // Debug: authorize + export at m/43'/60'/1581' — EIP-1581 root probe
 
 signals:
     void eventResponse(const QString& eventName, const QVariantList& data);

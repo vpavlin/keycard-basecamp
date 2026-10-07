@@ -20,6 +20,8 @@ if(DEFINED ENV{LOGOS_MODULE_BUILDER_ROOT})
         LINK_LIBRARIES OpenSSL::Crypto PkgConfig::sodium PkgConfig::pcsclite
         INCLUDE_DIRS keycard-core/src
         SOURCES
+            keycard-core/src/keycard_impl.h
+            keycard-core/src/keycard_impl.cpp
             keycard-core/src/plugin.h
             keycard-core/src/plugin.cpp
             keycard-core/src/KeycardBridge.h

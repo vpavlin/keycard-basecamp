@@ -1,16 +1,25 @@
 {
   "name": "keycard",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "core",
+  "interface": "universal",
   "category": "security",
   "description": "Keycard smartcard authentication module for Logos Basecamp",
   "main": "keycard_plugin",
   "dependencies": [],
-
+  "codegen": {
+    "impl_header": "keycard-core/src/keycard_impl.h"
+  },
   "nix": {
     "packages": {
-      "build": ["pkg-config", "pcsclite.dev"],
-      "runtime": ["openssl", "libsodium"]
+      "build": [
+        "pkg-config",
+        "pcsclite.dev"
+      ],
+      "runtime": [
+        "openssl",
+        "libsodium"
+      ]
     },
     "external_libraries": [
       {
@@ -28,7 +37,9 @@
         "keycard-core/src/KeycardBridge.cpp",
         "keycard-core/src/FilePairingStorage.cpp"
       ],
-      "extra_include_dirs": ["keycard-core/src"],
+      "extra_include_dirs": [
+        "keycard-core/src"
+      ],
       "extra_link_libraries": [
         "OpenSSL::Crypto",
         "PkgConfig::sodium",
